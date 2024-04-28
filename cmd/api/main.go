@@ -1,29 +1,70 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
+	"reflect"
 
 	"github.com/dangquyitt/go-event-driven-architecture/internal/application/controller"
 	"github.com/dangquyitt/go-event-driven-architecture/internal/application/usecase"
+	"github.com/dangquyitt/go-event-driven-architecture/internal/domain/event"
 	"github.com/dangquyitt/go-event-driven-architecture/internal/infra/queue"
 )
 
 func main() {
-	// initialize dependencies and implementations
-	queue := queue.NewMemoryQueueAdapter()
-	createOrderUseCase := usecase.NewCreateOrderUseCase(queue)
-	orderController := controller.NewOrderController(createOrderUseCase)
+	ctx := context.Background()
 
-	// ping
-	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("pong"))
-	})
+	// initialize queue
+	queue := queue.NewMemoryQueueAdapter()
+
+	// use cases
+	createOrderUseCase := usecase.NewCreateOrderUseCase(queue)
+	processPaymentUseCase := usecase.NewProcessOrderPaymentUseCase(queue)
+	stockMovementUseCase := usecase.NewStockMovementUseCase()
+	sendOrderEmailUseCase := usecase.NewSendOrderEmailUseCase()
+
+	// controllers
+	orderController := controller.NewOrderController(createOrderUseCase, processPaymentUseCase, stockMovementUseCase, sendOrderEmailUseCase)
 
 	// register routes
 	http.HandleFunc("/create-order", orderController.CreateOrder)
 
+	// mapping listeners
+	var list map[reflect.Type][]func(w http.ResponseWriter, r *http.Request) = map[reflect.Type][]func(w http.ResponseWriter, r *http.Request){
+		reflect.TypeOf(event.OrderCreatedEvent{}): {
+			orderController.ProcessOrderPayment,
+			orderController.StockMovement,
+			orderController.SendOrderEmail,
+		},
+	}
+
+	// register listeners
+	for eventType, handlers := range list {
+		for _, handler := range handlers {
+			queue.ListenerRegister(eventType, handler)
+		}
+	}
+
+	// connect queue
+	err := queue.Connect(ctx)
+	if err != nil {
+		log.Fatalf("Error connect queue %s", err)
+	}
+	defer queue.Disconnect(ctx)
+
+	// start consuming queues
+	OrderCreatedEvent := reflect.TypeOf(event.OrderCreatedEvent{}).Name()
+
+	go func(ctx context.Context, queueName string) {
+		err = queue.StartConsuming(ctx, queueName)
+		if err != nil {
+			log.Fatalf("Error running consumer %s: %s", queueName, err)
+		}
+	}(ctx, OrderCreatedEvent)
+
 	// start server
-	log.Println("Server is running on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	fmt.Println("Server is running on port 8080")
+	http.ListenAndServe(":8080", nil)
 }
