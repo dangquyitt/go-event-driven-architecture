@@ -1,7 +1,7 @@
 package queue
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 )
 

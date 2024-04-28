@@ -16,7 +16,7 @@ func main() {
 	ctx := context.Background()
 
 	// initialize queue
-	queue := queue.NewMemoryQueueAdapter()
+	queue := queue.NewRabbitMQAdapter("amqp://guest:guest@localhost:5672/")
 
 	// use cases
 	createOrderUseCase := usecase.NewCreateOrderUseCase(queue)
