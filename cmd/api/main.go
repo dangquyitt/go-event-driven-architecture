@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"reflect"
@@ -65,6 +64,6 @@ func main() {
 	}(ctx, OrderCreatedEvent)
 
 	// start server
-	fmt.Println("Server is running on port 8080")
+	log.Println("Server is running on port 8080")
 	http.ListenAndServe(":8080", nil)
 }

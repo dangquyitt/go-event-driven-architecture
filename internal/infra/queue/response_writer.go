@@ -40,5 +40,5 @@ func main() {
 	}
 	w := NewQueueResponseWriter()
 	okFn(w, r)
-	fmt.Println(w.statusCode)
+	log.Println(w.statusCode)
 }
